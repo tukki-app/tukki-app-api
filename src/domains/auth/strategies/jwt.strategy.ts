@@ -1,0 +1,20 @@
+import { ExtractJwt, Strategy } from 'passport-jwt';
+import { PassportStrategy } from '@nestjs/passport';
+import { Injectable } from '@nestjs/common';
+
+@Injectable()
+export class JwtStrategy extends PassportStrategy(Strategy) {
+  constructor() {
+    super({
+      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      ignoreExpiration: false,
+      secretOrKey: process.env.JWT_SECRET || 'fallback-secret-here-only-for-dev',
+    });
+  }
+
+  async validate(payload: any) {
+    // This payload is already verified here.
+    // We can inject user roles and other data into the request.
+    return { userId: payload.sub, role: payload.role, phone: payload.phone };
+  }
+}

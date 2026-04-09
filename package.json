@@ -1,0 +1,55 @@
+{
+  "name": "nestjs-project",
+  "version": "1.0.0",
+  "description": "A NestJS project for managing identity, trips, and bookings.",
+  "main": "src/main.ts",
+  "scripts": {
+    "start": "nest start",
+    "build": "nest build",
+    "test": "jest",
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "typeorm": "typeorm-ts-node-commonjs",
+    "db:migration:run": "npm run typeorm migration:run -- -d src/infrastructure/db/data-source.ts",
+    "db:migration:revert": "npm run typeorm migration:revert -- -d src/infrastructure/db/data-source.ts"
+  },
+  "dependencies": {
+    "@nestjs/common": "^9.0.0",
+    "@nestjs/core": "^9.0.0",
+    "@nestjs/jwt": "^9.0.0",
+    "@nestjs/passport": "^9.0.3",
+    "@nestjs/platform-express": "^9.0.0",
+    "@nestjs/typeorm": "^9.0.1",
+    "bcrypt": "^6.0.0",
+    "class-transformer": "^0.4.0",
+    "class-validator": "^0.13.1",
+    "passport": "^0.6.0",
+    "passport-jwt": "^4.0.1",
+    "pg": "^8.20.0",
+    "reflect-metadata": "^0.1.13",
+    "rxjs": "^7.0.0",
+    "typeorm": "^0.3.28"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "^9.0.0",
+    "@types/bcrypt": "^6.0.0",
+    "@types/passport-jwt": "^4.0.1",
+    "jest": "^27.0.0",
+    "ts-jest": "^27.0.0",
+    "ts-loader": "^9.2.6",
+    "ts-node": "^10.9.2",
+    "typescript": "^4.5.4"
+  },
+  "jest": {
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
+    "rootDir": "src",
+    "testRegex": ".spec.ts$",
+    "transform": {
+      "^.+\\.(t|j)s$": "ts-jest"
+    },
+    "testEnvironment": "node"
+  }
+}
