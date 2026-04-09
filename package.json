@@ -4,9 +4,9 @@
   "description": "A NestJS project for managing identity, trips, and bookings.",
   "main": "src/main.ts",
   "scripts": {
-    "start": "nest start",
+    "start": "npx @nestjs/cli start",
     "start:dev": "npx @nestjs/cli build && node dist/main.js",
-    "build": "nest build",
+    "build": "npx @nestjs/cli build",
     "test": "jest --runInBand",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage --runInBand",
