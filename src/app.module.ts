@@ -7,6 +7,7 @@ import { IdentityModule } from './domains/identity';
 import { InterfacesModule } from './interfaces/interfaces.module';
 import { AppCacheModule } from './infrastructure/cache/cache.module';
 import { DatabaseModule } from './infrastructure/db/database.module';
+import { CloudinaryModule } from './infrastructure/cloudinary/cloudinary.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { DatabaseModule } from './infrastructure/db/database.module';
     AuthModule,
     AppCacheModule,
     DatabaseModule,
+    CloudinaryModule,
     InterfacesModule,
   ],
 })

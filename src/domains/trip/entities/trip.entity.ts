@@ -47,6 +47,9 @@ export class Trip {
   @Column({ nullable: true })
   price!: number;
 
+  @Column({ name: 'vehicle_images', type: 'text', array: true, default: [] })
+  vehicleImages!: string[];
+
   @VersionColumn()
   version!: number;
 

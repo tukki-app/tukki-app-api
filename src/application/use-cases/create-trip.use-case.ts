@@ -8,7 +8,7 @@ export class CreateTripUseCase {
   constructor(private readonly tripRepository: TripRepository) {}
 
   async execute(dto: CreateTripDto): Promise<Trip> {
-    const { driverId, departureCity, destinationCity, departureTime, capacity, price } = dto;
+    const { driverId, departureCity, destinationCity, departureTime, capacity, price, vehicleImages } = dto;
 
     return this.tripRepository.save({
       driverId,
@@ -18,6 +18,7 @@ export class CreateTripUseCase {
       capacity,
       availableSeats: capacity,
       price,
+      vehicleImages: vehicleImages ?? [],
       status: 'ACTIVE',
     });
   }

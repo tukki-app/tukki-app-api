@@ -1,5 +1,5 @@
-import { IsUUID, IsString, IsDateString, IsInt, Min } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsUUID, IsString, IsDateString, IsInt, Min, IsArray, IsUrl, IsOptional, ArrayMaxSize } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateTripDto {
   @ApiProperty({
@@ -33,4 +33,17 @@ export class CreateTripDto {
   @IsInt()
   @Min(0)
   price!: number;
+
+  @ApiPropertyOptional({
+    example: [
+      'https://res.cloudinary.com/demo/image/upload/v1/covoiturage/vehicles/abc123.jpg',
+    ],
+    description: 'URLs des photos du véhicule. Obtenues depuis POST /upload/vehicle-images. Maximum 5 photos.',
+    type: [String],
+  })
+  @IsArray()
+  @IsUrl({}, { each: true })
+  @ArrayMaxSize(5)
+  @IsOptional()
+  vehicleImages?: string[];
 }

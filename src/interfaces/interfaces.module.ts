@@ -8,11 +8,12 @@ import { AuthController } from './http/controllers/auth.controller';
 import { IdentityController } from './http/controllers/identity.controller';
 import { TripController } from './http/controllers/trip.controller';
 import { BookingController } from './http/controllers/booking.controller';
+import { UploadController } from './http/controllers/upload.controller';
 import { DriverAvailabilityGateway } from './websocket/gateways/driver-availability.gateway';
 
 @Module({
   imports: [AuthModule, IdentityModule, TripModule, BookingModule],
-  controllers: [AuthController, IdentityController, TripController, BookingController],
+  controllers: [AuthController, IdentityController, TripController, BookingController, UploadController],
   providers: [DriverAvailabilityGateway],
 })
 export class InterfacesModule {}
