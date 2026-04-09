@@ -68,7 +68,7 @@ jobs:
 
   # ─── Job 2: Deploy to VPS ────────────────────────────────────────────────────
   deploy:
-    name: Deploy → VPS (covoiturage.backnd-api.cloud)
+    name: Deploy to VPS
     runs-on: ubuntu-latest
     needs: publish
     environment:
@@ -89,31 +89,41 @@ jobs:
 
       - name: Deploy on VPS
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          IMAGE_TAG: ${{ needs.publish.outputs.image-tag }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+          PROD_JWT_SECRET: ${{ secrets.PROD_JWT_SECRET }}
+          PROD_POSTGRES_DB: ${{ secrets.PROD_POSTGRES_DB }}
+          PROD_POSTGRES_USER: ${{ secrets.PROD_POSTGRES_USER }}
+          PROD_POSTGRES_PASSWORD: ${{ secrets.PROD_POSTGRES_PASSWORD }}
+          DEPLOY_PATH: ${{ env.DEPLOY_PATH }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
+          envs: GITHUB_REPOSITORY,IMAGE_TAG,GITHUB_ACTOR,GITHUB_TOKEN,PROD_DATABASE_URL,PROD_JWT_SECRET,PROD_POSTGRES_DB,PROD_POSTGRES_USER,PROD_POSTGRES_PASSWORD,DEPLOY_PATH
           script: |
             set -e
-            cd ${{ env.DEPLOY_PATH }}
+            mkdir -p "$DEPLOY_PATH"
+            cd "$DEPLOY_PATH"
 
-            # ── Écrire le .env de prod ──────────────────────────────────────
-            cat > .env << EOF
-GITHUB_REPOSITORY=${{ github.repository }}
-IMAGE_TAG=${{ needs.publish.outputs.image-tag }}
-DATABASE_URL='${{ secrets.PROD_DATABASE_URL }}'
-JWT_SECRET='${{ secrets.PROD_JWT_SECRET }}'
-POSTGRES_DB=${{ secrets.PROD_POSTGRES_DB }}
-POSTGRES_USER=${{ secrets.PROD_POSTGRES_USER }}
-POSTGRES_PASSWORD='${{ secrets.PROD_POSTGRES_PASSWORD }}'
-EOF
+            # Écrire le .env — printf évite les problèmes de caractères spéciaux
+            printf 'GITHUB_REPOSITORY=%s\n' "$GITHUB_REPOSITORY" > .env
+            printf 'IMAGE_TAG=%s\n' "$IMAGE_TAG" >> .env
+            printf 'DATABASE_URL=%s\n' "$PROD_DATABASE_URL" >> .env
+            printf 'JWT_SECRET=%s\n' "$PROD_JWT_SECRET" >> .env
+            printf 'POSTGRES_DB=%s\n' "$PROD_POSTGRES_DB" >> .env
+            printf 'POSTGRES_USER=%s\n' "$PROD_POSTGRES_USER" >> .env
+            printf 'POSTGRES_PASSWORD=%s\n' "$PROD_POSTGRES_PASSWORD" >> .env
 
-            # ── S'assurer que le réseau Traefik existe ──────────────────────
-            docker network inspect traefik-public >/dev/null 2>&1 \
-              || docker network create traefik-public
+            # Réseau Traefik
+            docker network inspect traefik-public >/dev/null 2>&1 || docker network create traefik-public
 
-            # ── S'assurer que Traefik tourne ────────────────────────────────
-            if ! docker ps --format '{{.Names}}' | grep -q traefik; then
+            # Démarrer Traefik si absent
+            if ! docker ps --format '{{.Names}}' | grep -q "^traefik$"; then
               echo "==> Starting Traefik"
               docker run -d \
                 --name traefik \
@@ -125,7 +135,6 @@ EOF
                 -v /var/run/docker.sock:/var/run/docker.sock:ro \
                 traefik:v3.0 \
                 --api.dashboard=false \
-                --api.insecure=false \
                 --log.level=INFO \
                 --providers.docker=true \
                 --providers.docker.exposedbydefault=false \
@@ -140,19 +149,17 @@ EOF
                 --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
             fi
 
-            # ── Login GHCR ──────────────────────────────────────────────────
-            echo "${{ secrets.GITHUB_TOKEN }}" \
-              | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            # Login GHCR
+            echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
 
-            # ── Pull nouvelle image ─────────────────────────────────────────
+            # Pull nouvelle image
             docker compose -f docker-compose.prod.yml pull app
 
-            # ── Migrations ─────────────────────────────────────────────────
+            # Migrations
             echo "==> Running migrations"
             docker compose -f docker-compose.prod.yml run --rm \
-              -e DATABASE_URL=${{ secrets.PROD_DATABASE_URL }} \
+              -e DATABASE_URL="$PROD_DATABASE_URL" \
               app node -e "
-                require('dotenv/config');
                 const { AppDataSource } = require('./dist/infrastructure/db/data-source');
                 AppDataSource.initialize()
                   .then(() => AppDataSource.runMigrations())
@@ -160,43 +167,37 @@ EOF
                   .catch(e => { console.error(e); process.exit(1); });
               "
 
-            # ── Déploiement zero-downtime ───────────────────────────────────
-            echo "==> Deploying new version"
+            # Déploiement
+            echo "==> Deploying"
             docker compose -f docker-compose.prod.yml up -d --no-deps --remove-orphans app
 
-            # ── Attendre que le health check passe ─────────────────────────
-            echo "==> Waiting for health check..."
+            # Health check
+            echo "==> Waiting for health check"
             for i in $(seq 1 12); do
-              if docker exec covoiturage-api wget -qO- http://localhost:3000/health > /dev/null 2>&1; then
-                echo "Health check passed after ${i}x5s"
+              if docker exec covoiturage-api wget -qO- http://localhost:3000/health >/dev/null 2>&1; then
+                echo "OK after ${i}x5s"
                 break
               fi
-              if [ $i -eq 12 ]; then
-                echo "Health check failed — rolling back"
-                docker compose -f docker-compose.prod.yml rollout app || true
+              if [ "$i" -eq 12 ]; then
+                echo "Health check failed"
                 exit 1
               fi
               sleep 5
             done
 
-            # ── Nettoyage images obsolètes ──────────────────────────────────
             docker image prune -f
-
-            echo "==> Deployed successfully"
+            echo "==> Done"
             docker compose -f docker-compose.prod.yml ps
 
       - name: Smoke test
         run: |
           sleep 10
-          curl -f https://covoiturage.backnd-api.cloud/health \
-            -H "Accept: application/json" \
-            --retry 3 --retry-delay 5 || exit 1
+          curl -f https://covoiturage.backnd-api.cloud/health --retry 3 --retry-delay 5
 
       - name: Notify on failure
         if: failure()
         run: |
-          echo "::error::Deployment to covoiturage.backnd-api.cloud FAILED"
-          echo "::error::Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.publish.outputs.image-tag }}"
+          echo "::error::Deployment FAILED — ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.publish.outputs.image-tag }}"
 
   # ─── Job 3: GitHub Release (tags uniquement) ─────────────────────────────────
   release:
@@ -215,13 +216,12 @@ EOF
         with:
           generate_release_notes: true
           body: |
-            ## 🚀 Déployé sur https://covoiturage.backnd-api.cloud
+            ## Deployed to https://covoiturage.backnd-api.cloud
 
             ### Docker Image
-            ```bash
+            ```
             docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.publish.outputs.image-tag }}
             ```
-            **Digest:** `${{ needs.publish.outputs.image-digest }}`
+            Digest: `${{ needs.publish.outputs.image-digest }}`
 
-            ### Swagger
-            https://covoiturage.backnd-api.cloud/api/docs
+            Swagger: https://covoiturage.backnd-api.cloud/api/docs
