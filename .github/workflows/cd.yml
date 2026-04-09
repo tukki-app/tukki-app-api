@@ -15,6 +15,8 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
   DEPLOY_PATH: /opt/covoiturage
+  APP_PORT: '3004'
+  DOMAIN: covoiturage.backnd-api.cloud
 
 jobs:
   # ─── Job 1: Publish Docker Image ─────────────────────────────────────────────
@@ -100,17 +102,19 @@ jobs:
           PROD_POSTGRES_USER: ${{ secrets.PROD_POSTGRES_USER }}
           PROD_POSTGRES_PASSWORD: ${{ secrets.PROD_POSTGRES_PASSWORD }}
           DEPLOY_PATH: ${{ env.DEPLOY_PATH }}
+          APP_PORT: ${{ env.APP_PORT }}
+          DOMAIN: ${{ env.DOMAIN }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          envs: GITHUB_REPOSITORY,IMAGE_TAG,GITHUB_ACTOR,GITHUB_TOKEN,PROD_DATABASE_URL,PROD_JWT_SECRET,PROD_POSTGRES_DB,PROD_POSTGRES_USER,PROD_POSTGRES_PASSWORD,DEPLOY_PATH
+          envs: GITHUB_REPOSITORY,IMAGE_TAG,GITHUB_ACTOR,GITHUB_TOKEN,PROD_DATABASE_URL,PROD_JWT_SECRET,PROD_POSTGRES_DB,PROD_POSTGRES_USER,PROD_POSTGRES_PASSWORD,DEPLOY_PATH,APP_PORT,DOMAIN
           script: |
             set -e
             mkdir -p "$DEPLOY_PATH"
             cd "$DEPLOY_PATH"
 
-            # Écrire le .env — printf évite les problèmes de caractères spéciaux
+            # Écrire le .env
             printf 'GITHUB_REPOSITORY=%s\n' "$GITHUB_REPOSITORY" > .env
             printf 'IMAGE_TAG=%s\n' "$IMAGE_TAG" >> .env
             printf 'DATABASE_URL=%s\n' "$PROD_DATABASE_URL" >> .env
@@ -118,36 +122,7 @@ jobs:
             printf 'POSTGRES_DB=%s\n' "$PROD_POSTGRES_DB" >> .env
             printf 'POSTGRES_USER=%s\n' "$PROD_POSTGRES_USER" >> .env
             printf 'POSTGRES_PASSWORD=%s\n' "$PROD_POSTGRES_PASSWORD" >> .env
-
-            # Réseau Traefik
-            docker network inspect traefik-public >/dev/null 2>&1 || docker network create traefik-public
-
-            # Démarrer Traefik si absent
-            if ! docker ps --format '{{.Names}}' | grep -q "^traefik$"; then
-              echo "==> Starting Traefik"
-              docker run -d \
-                --name traefik \
-                --restart always \
-                --network traefik-public \
-                -p 80:80 \
-                -p 443:443 \
-                -v traefik-letsencrypt:/letsencrypt \
-                -v /var/run/docker.sock:/var/run/docker.sock:ro \
-                traefik:v3.0 \
-                --api.dashboard=false \
-                --log.level=INFO \
-                --providers.docker=true \
-                --providers.docker.exposedbydefault=false \
-                --providers.docker.network=traefik-public \
-                --entrypoints.web.address=:80 \
-                --entrypoints.websecure.address=:443 \
-                --entrypoints.web.http.redirections.entrypoint.to=websecure \
-                --entrypoints.web.http.redirections.entrypoint.scheme=https \
-                --certificatesresolvers.letsencrypt.acme.httpchallenge=true \
-                --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web \
-                --certificatesresolvers.letsencrypt.acme.email=lifesonou@gmail.com \
-                --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
-            fi
+            printf 'APP_PORT=%s\n' "$APP_PORT" >> .env
 
             # Login GHCR
             echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
@@ -171,6 +146,35 @@ jobs:
             echo "==> Deploying"
             docker compose -f docker-compose.prod.yml up -d --no-deps --remove-orphans app
 
+            # Config nginx si pas encore présente
+            if [ ! -f /etc/nginx/sites-enabled/covoiturage ]; then
+              echo "==> Creating nginx config"
+              cat > /etc/nginx/sites-available/covoiturage << NGINX
+            server {
+                listen 80;
+                server_name $DOMAIN;
+
+                location / {
+                    proxy_pass http://localhost:$APP_PORT;
+                    proxy_http_version 1.1;
+                    proxy_set_header Upgrade \$http_upgrade;
+                    proxy_set_header Connection 'upgrade';
+                    proxy_set_header Host \$host;
+                    proxy_set_header X-Real-IP \$remote_addr;
+                    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                    proxy_set_header X-Forwarded-Proto \$scheme;
+                    proxy_cache_bypass \$http_upgrade;
+                }
+            }
+            NGINX
+              ln -sf /etc/nginx/sites-available/covoiturage /etc/nginx/sites-enabled/covoiturage
+              nginx -t && nginx -s reload
+
+              # SSL via Certbot
+              certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos \
+                -m lifesonou@gmail.com --redirect
+            fi
+
             # Health check
             echo "==> Waiting for health check"
             for i in $(seq 1 12); do
@@ -186,18 +190,18 @@ jobs:
             done
 
             docker image prune -f
-            echo "==> Done"
+            echo "==> Deployed successfully"
             docker compose -f docker-compose.prod.yml ps
 
       - name: Smoke test
         run: |
-          sleep 10
+          sleep 15
           curl -f https://covoiturage.backnd-api.cloud/health --retry 3 --retry-delay 5
 
       - name: Notify on failure
         if: failure()
         run: |
-          echo "::error::Deployment FAILED — ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.publish.outputs.image-tag }}"
+          echo "::error::Deployment FAILED"
 
   # ─── Job 3: GitHub Release (tags uniquement) ─────────────────────────────────
   release:
