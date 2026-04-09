@@ -41,7 +41,10 @@ describe('LoginUseCase', () => {
 
     const result = await useCase.execute({ phone: '+221700000001', password: 'pass1234' });
 
-    expect(result).toEqual({ accessToken: 'mock.jwt.token' });
+    expect(result.accessToken).toBe('mock.jwt.token');
+    expect(result.user).toBeDefined();
+    expect(result.user.id).toBe(mockUser.id);
+    expect((result.user as any).password).toBeUndefined();
     expect(jwtService.sign).toHaveBeenCalledWith({
       sub: mockUser.id,
       role: mockUser.role,

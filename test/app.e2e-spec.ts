@@ -87,6 +87,9 @@ describe('API e2e', () => {
         .expect(200);
 
       expect(res.body.accessToken).toBeDefined();
+      expect(res.body.user).toBeDefined();
+      expect(res.body.user.phone).toBe('+221799000002');
+      expect(res.body.user.password).toBeUndefined();
       driverToken = res.body.accessToken;
     });
 
@@ -96,6 +99,7 @@ describe('API e2e', () => {
         .send({ phone: '+221799000001', password: 'pass1234' })
         .expect(200);
 
+      expect(res.body.user.role).toBe('PASSENGER');
       passengerToken = res.body.accessToken;
     });
 

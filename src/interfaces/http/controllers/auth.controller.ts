@@ -24,7 +24,18 @@ export class AuthController {
     status: 200,
     description: 'Connexion réussie',
     schema: {
-      example: { accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' },
+      example: {
+        accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+        user: {
+          id: 'a975e635-282a-4d4f-981d-d1a33f505ec9',
+          phone: '+221700000001',
+          name: 'Alice Ndiaye',
+          role: 'PASSENGER',
+          isVerified: false,
+          createdAt: '2026-04-09T06:09:54.607Z',
+          updatedAt: '2026-04-09T06:09:54.607Z',
+        },
+      },
     },
   })
   @ApiResponse({ status: 401, description: 'Numéro de téléphone ou mot de passe incorrect' })
