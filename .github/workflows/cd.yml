@@ -117,11 +117,11 @@ jobs:
             # Écrire le .env
             printf 'GITHUB_REPOSITORY=%s\n' "$GITHUB_REPOSITORY" > .env
             printf 'IMAGE_TAG=%s\n' "$IMAGE_TAG" >> .env
-            printf 'DATABASE_URL=%s\n' "$PROD_DATABASE_URL" >> .env
-            printf 'JWT_SECRET=%s\n' "$PROD_JWT_SECRET" >> .env
+            printf 'DATABASE_URL="%s"\n' "$PROD_DATABASE_URL" >> .env
+            printf 'JWT_SECRET="%s"\n' "$PROD_JWT_SECRET" >> .env
             printf 'POSTGRES_DB=%s\n' "$PROD_POSTGRES_DB" >> .env
             printf 'POSTGRES_USER=%s\n' "$PROD_POSTGRES_USER" >> .env
-            printf 'POSTGRES_PASSWORD=%s\n' "$PROD_POSTGRES_PASSWORD" >> .env
+            printf 'POSTGRES_PASSWORD="%s"\n' "$PROD_POSTGRES_PASSWORD" >> .env
             printf 'APP_PORT=%s\n' "$APP_PORT" >> .env
 
             # Login GHCR
